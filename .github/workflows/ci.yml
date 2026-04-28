@@ -1,4 +1,4 @@
-name: CI - Spring Boot
+name: CI - Spring Boot + ECR
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -21,8 +22,34 @@ jobs:
 
       - name: Build and test
         run: mvn -B clean verify
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+
+      - name: Build JAR
+        run: mvn package -DskipTests
+
+      # 🔐 Configurar AWS
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: app-jar
-          path: target/*.jar
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      # 🔑 Login a ECR
+      - name: Login to ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # 🐳 Build imagen Docker
+      - name: Build Docker image
+        run: |
+          docker build -t my-app .
+
+      # 🏷️ Tag imagen con el repo de ECR
+      - name: Tag Docker image
+        run: |
+          docker tag my-app:latest ${{ steps.login-ecr.outputs.registry }}/my-app:latest
+
+      # 🚀 Push a ECR
+      - name: Push to ECR
+        run: |
+          docker push ${{ steps.login-ecr.outputs.registry }}/my-app:latest
